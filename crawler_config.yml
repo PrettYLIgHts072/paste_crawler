@@ -1,0 +1,38 @@
+browser_headers:
+- User-Agent: Mozilla/5.0 (Macintosh; Intel Mac OS X 10_10_1) AppleWebKit/537.36 (KHTML,
+    like Gecko) Chrome/39.0.2171.95 Safari/537.36
+- User-Agent: Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML,
+    like Gecko) Chrome/70.0.3538.77 Safari/537.36
+- User-Agent: Mozilla/5.0 (X11; Linux i686; rv:64.0) Gecko/20100101 Firefox/64.0
+- User-Agent: Opera/9.80 (X11; Linux i686; Ubuntu/14.10) Presto/2.12.388 Version/12.16
+- User-Agent: Opera/12.02 (Android 4.1; Linux; Opera Mobi/ADR-1111101157; U; en-US)
+    Presto/2.9.201 Version/12.02
+logger_format: '%(asctime)s: %(message)s'
+logging_datefmt: '%H:%M:%S'
+max_url_queue_size: 1000
+mongo_port: 27017
+#mongo_url: localhost
+mongo_url: mongodb
+pages:
+  archive:
+    features:
+      pastes_urls: //tr/td[not(@class)]/a/@href
+    next_page: paste_url
+    seed: https://www.pastebin.com
+    url: /archive
+  paste_url:
+    features:
+      author: //div[@class="paste_box_line2"]/a/text()
+      content: //textarea[@class="paste_code"]/text()
+      time: //div[@class="paste_box_frame"]/descendant::div[@class="paste_box_line2"]/span/@title
+      title: //div[@class="paste_box_line1"]/@title
+    next_page: null
+    seed: https://www.pastebin.com
+    url: /*
+res_time_format: UTC
+seeds:
+- interval: 120
+  next_page: archive_url
+  seed: https://www.pastebin.com
+src_time_zone: US/Central
+time_parse_str: dddd Do [of] MMMM YYYY hh:mm:ss a [CDT]

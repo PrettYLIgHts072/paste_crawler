@@ -1,0 +1,32 @@
+version: '3'
+services:
+    crawler:
+        build: .
+        container_name: paste_bin_crawler
+        links:
+            - mongodb
+        depends_on:
+            - mongodb
+        volumes:
+          - ./:/home
+        working_dir: /home
+        command: python3 main.py
+
+    mongodb:
+        image: mongo:latest
+        container_name: mongodb
+        hostname: mongodb
+#        environment:
+#          - MONGODB_USER=user
+#          - MONGODB_PASS=pass
+#          - MONGO_INITDB_USERNAME=user
+#          - MONGO_INITDB_PASSWORD=pass
+#          - MONGO_INITDB_DATABASE=paste_bin
+#          - MONGO_DATA_DIR=/data/db
+#          - MONGO_LOG_DIR=/dev/null
+        volumes:
+#          - ./init-mongo.js:/docker-entrypoint-init.d/init-mongo.js:ro
+          - ./docker-volume:/data/db
+        ports:
+            - 27017-27019:27017-27019
+        command: mongod --logpath=/dev/null # --quiet
