@@ -10,9 +10,11 @@ browser_headers:
 logger_format: '%(asctime)s: %(message)s'
 logging_datefmt: '%H:%M:%S'
 max_url_queue_size: 1000
-mongo_port: 27017
-#mongo_url: localhost
-mongo_url: mongodb
+db:
+  mongo_port: 27017
+  mongo_url: localhost
+  #mongo_url: mongodb
+  db_name: paste_bin
 pages:
   archive:
     features:
@@ -32,7 +34,9 @@ pages:
 res_time_format: UTC
 seeds:
 - interval: 120
-  next_page: archive_url
+  next_page: archive
   seed: https://www.pastebin.com
 src_time_zone: US/Central
 time_parse_str: dddd Do [of] MMMM YYYY hh:mm:ss a [CDT]
+
+num_connections: 5

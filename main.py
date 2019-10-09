@@ -12,81 +12,25 @@ from lxml import html
 from pymongo import MongoClient
 from requests.exceptions import HTTPError
 
-settings = {
-    'seeds': [
-        {
-            'seed': 'https://www.pastebin.com',
-            'next_page': 'archive',
-            'interval': 50,
-        },
-    ],
-    'pages': {
-        'archive': {
-            'seed': 'https://www.pastebin.com',
-            'url': '/archive',
-            'features': {
-                'pastes_urls': '//tr/td[not(@class)]/a/@href',
-            },
-            'next_page': 'paste_url',
-        },
-        'paste_url': {
-            'seed': 'https://www.pastebin.com',
-            'url': '/*',
-            'features': {
-                'time': '//div[@class="paste_box_frame"]/descendant::'
-                              'div[@class="paste_box_line2"]/span/@title',
-                'title': '//div[@class="paste_box_line1"]/@title',
-                'author': '//div[@class="paste_box_line2"]/a/text()',
-                'content': '//textarea[@class="paste_code"]/text()',
-            },
-            'next_page': None,
-        },
-    },
-    'mongo_url': 'mongodb',
-    # 'mongo_url': 'localhost',
-    'mongo_port': 27017,
 
-    'max_url_queue_size': 1000,
-    'browser_headers': [
-        {'User-Agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_10_1)'
-                       ' AppleWebKit/537.36 (KHTML, like Gecko) '
-                       'Chrome/39.0.2171.95 Safari/537.36'},
-        {'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) '
-                       'AppleWebKit/537.36 (KHTML, like Gecko) '
-                       'Chrome/70.0.3538.77 Safari/537.36'},
-        {'User-Agent': 'Mozilla/5.0 (X11; Linux i686; rv:64.0) '
-                       'Gecko/20100101 Firefox/64.0'},
-        {'User-Agent': 'Opera/9.80 (X11; Linux i686; Ubuntu/14.10) '
-                       'Presto/2.12.388 Version/12.16'},
-        {'User-Agent': 'Opera/12.02 (Android 4.1; Linux; '
-                       'Opera Mobi/ADR-1111101157; U; en-US) '
-                       'Presto/2.9.201 Version/12.02'}
-    ],
-    'time_parse_str':  'dddd Do [of] MMMM YYYY hh:mm:ss a [CDT]',
-    'res_time_format': 'UTC',
-    'src_time_zone': 'US/Central',
-    'logger_format': '%(asctime)s: %(message)s',
-    'logging_datefmt': "%H:%M:%S"
-}
-
-
-def format_time(in_time) -> str:
+def format_time(in_time, parse_str, src_time, dst_time) -> str:
     in_time = str(in_time)
     try:
-        rv = arrow.get(str(in_time), settings['time_parse_str'])
-        rv = rv.replace(tzinfo=settings['src_time_zone'])
-        rv = rv.to(settings['res_time_format']).ctime()
+        rv = arrow.get(str(in_time), parse_str)
+        rv = rv.replace(tzinfo=src_time)
+        rv = rv.to(dst_time).ctime()
+        return rv
     except Exception as e:
         logging.error(e)
-    return rv
 
 
 def clean_trailing_spaces(in_str: str):
     return '\n'.join(map(lambda line: line.strip(), in_str.split('\n')))
 
 
-def clean_results(res: dict) -> dict:
-    res['time'] = format_time(res['time'][0])
+def clean_results(res: dict, settings) -> dict:
+    res['time'] = format_time(res['time'][0], settings['time_parse_str'],
+                              settings['src_time_zone'], settings['res_time_format'])
     try:
         res['title'] = res['title'][0]
         if res['title'] == 'Untitled' or res['title'] == 'Guest' \
@@ -107,13 +51,19 @@ def clean_results(res: dict) -> dict:
     return res
 
 
-def fetch_html_content_from_url(url: str) -> Optional[bytes]:
-    html_page = requests.get(url)  # TODO: add headers
-    html_page.raise_for_status()
-    return html_page.content
+async def fetch_html_content_from_url(url: str, retry: int = 2) -> Optional[bytes]:
+    try:
+        html_page = requests.get(url)  # TODO: add headers
+        html_page.raise_for_status()
+        return html_page.content
+    except HTTPError as http_err:
+        print(f'http error occurred: {http_err} while getting: {url}')
+        if retry > 0:
+            await asyncio.sleep(120)
+            await fetch_html_content_from_url(url, retry - 1)
 
 
-def parse_page_with_rule(page: bytes, xpath_rule: str) -> list:
+def extract_features(page: bytes, xpath_rule: str) -> list:
     tree = html.fromstring(page)
     results_list = tree.xpath(xpath_rule)
     return results_list
@@ -126,97 +76,118 @@ async def random_wait(a: int = 1, b: int = 5, caller=None):
     await asyncio.sleep(i)
 
 
-async def produce(seed: dict, url_queue: asyncio.Queue) -> None:
-    while True:
-        i = random.randint(132322, 1123123)
-        await url_queue.put(settings['pages'][seed['next_page']])
-        logging.info(f"Producer {settings['seeds'][0]['seed']}"
-                     f" added <{i}> to queue.")
-        logging.info("queue length:", url_queue.qsize())
-        await asyncio.sleep(seed['interval'])
+class Job:
+    def __init__(self, url: str, next_url, seed):
+        self.url = url
+        self.next_url = next_url
+        self.seed = seed
 
 
-async def consume(name: int, q: asyncio.Queue,
-                  paste_collection: pymongo.collection.Collection) -> None:
-    while True:
+class Crawler:
+    def __init__(self, settings_path: str = "crawler_config.yml"):
         try:
-            await random_wait(caller=f"Consumer {name}")
-            job = await q.get()
-            logging.info(f"Consumer {name} got element <{job}>"
-                         f" and {job['features']} {job['next_page']}")
-            html_page_content = fetch_html_content_from_url(job['seed']
-                                                            + job['url'])
+            self.config = yaml.safe_load(open(settings_path))
+        except FileNotFoundError:
+            logging.error(f"settings file cant be fount at: {settings_path}")
+            print(f"settings file cant be fount at: {settings_path}")
 
-            if job['next_page']:
-                res = []
-                for feature_name, feature_rule in job['features'].items():
-                    res = parse_page_with_rule(html_page_content,
-                                               feature_rule)
-                next_job = settings['pages'][job['next_page']]
-                for r in res:
-                    next_job['url'] = str(r)
-                    await q.put(next_job.copy())
-            else:
-                # store to mongo db
-                res = {}
-                for feature_name, feature_rule in job['features'].items():
-                    res[feature_name] = \
-                        parse_page_with_rule(html_page_content, feature_rule)
-                res = clean_results(res)
-                # res['url'] = job['seed'] + job['url']
-                logging.info("storing job results to db \t\t {}"
-                             .format(list(res.items())[:2]))
-                try:
-                    # post_id = paste_collection.insert_one(res).inserted_id
-                    post_id = paste_collection\
-                        .update({'url': job['seed'] + job['url']},
-                                res,
-                                upsert=True)
-                    logging.info(f"post successful, post id {post_id}")
-                except pymongo.errors.ServerSelectionTimeoutError as e:
-                    logging.error(e)
-                except Exception as e:
-                    logging.error("failed to save post to mongo", e)
-            q.task_done()
-        except HTTPError as http_err:
-            print(f'http error occurred: {http_err}')
+        self.to_run = True
+
+        logging.basicConfig(format=self.config['logger_format'],
+                            level=logging.DEBUG,
+                            # level=logging.INFO,
+                            datefmt=self.config['logging_datefmt'])
+        self.loop = asyncio.get_event_loop()
+        self.url_queue = asyncio.Queue()
+
+        self.db_collection = self.get_db_collection(self.config['db'])
+        self.producers = \
+            self.create_loop_event_tasks(self.produce, self.config['seeds'])
+        self.producers = \
+            self.create_loop_event_tasks(self.consume,
+                                         range(self.config['num_connections']))
+
+    def create_loop_event_tasks(self, func, tasks):
+        rv = [self.loop.create_task(func(t, self.url_queue)) for t in tasks]
+        return rv
+
+    @staticmethod
+    def get_db_collection(conf):
+        mongo_client = MongoClient(conf['mongo_url'], conf['mongo_port'])
+        db = mongo_client[conf['db_name']]
+        return db['paste_collection']
+
+    async def consume(self, name: int, q: asyncio.Queue) -> None:
+        while True:
+            try:
+                await random_wait(caller=f"Consumer {name}")
+                job = await q.get()
+                logging.info(f"Consumer {name} got element <{job}>"
+                             f" and {job['features']} {job['next_page']}")
+                content = await fetch_html_content_from_url(job['seed'] + job['url'])
+
+                if job['next_page']:
+                    res = []
+                    for feature, rule in job['features'].items():
+                        res = extract_features(content, rule)
+                    next_job = self.config['pages'][job['next_page']]
+                    for r in res:
+                        next_job['url'] = str(r)
+                        await q.put(next_job.copy())
+                else:
+                    res = {}
+                    for feature, rule in job['features'].items():
+                        res[feature] = extract_features(content, rule)
+                    res = clean_results(res, self.config)
+                    logging.debug("storing job results to db \t\t {}"
+                                  .format(list(res.items())[:2]))
+                    self.save_result(job, res)
+                q.task_done()
+            except HTTPError as http_err:
+                print(f'http error occurred: {http_err}')
+            except Exception as e:
+                logging.info(f"consumer got problem {e}")
+
+    def save_result(self, job, result):
+        try:
+            post_id = self.db_collection.update(
+                {'url': job['seed'] + job['url']},
+                result,
+                upsert=True)
+            logging.debug(f"post successful, post id {post_id}")
+        except pymongo.errors.ServerSelectionTimeoutError as e:
+            logging.error(e)
         except Exception as e:
-            logging.info(f"consumer got problem {e}")
+            logging.error("failed to save post to mongo", e)
 
+    def save_result_to_db(self, result):
+        pass
 
-async def main(nprod: int, ncon: int):
-    logging.basicConfig(format=settings['logger_format'], level=logging.INFO,
-                        datefmt=settings['logging_datefmt'])
-    q = asyncio.Queue()
+    async def produce(self, seed: dict, url_queue: asyncio.Queue) -> None:
+        while self.to_run:
+            i = random.randint(132322, 1123123)
+            await url_queue.put(self.config['pages'][seed['next_page']])
+            logging.info(f"Producer {self.config['seeds'][0]['seed']}"
+                         f" added <{i}> to queue.")
+            await asyncio.sleep(seed['interval'])
 
-    loop = asyncio.get_event_loop()
+    async def crawl(self):
+        await asyncio.gather(*self.producers)
+        await self.url_queue.join()  # Implicitly awaits consumers, too
+        for c in self.consumers:
+            c.cancel()
 
-    config = yaml.safe_load(open("crawler_config.yml"))
-    # config = settings
-    mongo_client = MongoClient(config['mongo_url'], config['mongo_port'],
-                               # username='user',
-                               # password='pass',
-                               )
-    paste_db = mongo_client['paste_bin']
-    paste_collection = paste_db['paste_collection']
-    consumers = \
-        [loop.create_task(consume(n, q, paste_collection))
-         for n in range(ncon)]
-    producers = [loop.create_task(produce(seed, q))
-                 for seed in settings['seeds']]
-    await asyncio.gather(*producers)
-    await q.join()  # Implicitly awaits consumers, too
-    for c in consumers:
-        c.cancel()
+    def start(self):
+        try:
+            self.loop.run_until_complete(self.crawl())
+        except KeyboardInterrupt:
+            logging.info("exiting on keyboard interrupt")
+            self.stop()
+
+    def stop(self):
+        self.to_run = False
 
 
 if __name__ == "__main__":
-    import argparse
-    random.seed(444)
-    parser = argparse.ArgumentParser()
-    parser.add_argument("-p", "--nprod", type=int, default=1)
-    parser.add_argument("-c", "--ncon", type=int, default=4)
-    ns = parser.parse_args()
-
-    loop = asyncio.get_event_loop()
-    loop.run_until_complete(main(**ns.__dict__))
+    paste_bin_crawler = Crawler()
+    paste_bin_crawler.start()
