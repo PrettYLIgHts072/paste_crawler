@@ -90,11 +90,13 @@ class Crawler:
             response = requests.get(url, headers=random.choice(self.headers))
             response.raise_for_status()
             return response.content
-        except HTTPError as http_err:
-            print(f'http error occurred: {http_err} while getting: {url}')
+        except HTTPError as err:
+            logging.error(f'http error occurred: {err} while getting: {url}')
             if retry > 0:
                 await asyncio.sleep(120)
                 await self.fetch_page(url, retry - 1)
+            else:
+                raise Exception('Didn\'t get {} page'.format(url))
 
     @staticmethod
     def get_db_collection(conf):
@@ -130,7 +132,7 @@ class Crawler:
         while True:
             try:
                 await random_wait(caller=f"Consumer {name}")
-                job = await self.url_queue.get()
+                job = await self.get_a_job()
                 logging.debug(f"Consumer {name} got element <{job}>"
                               f" and {job['features']} {job['next_page']}")
                 job_url = job['seed'] + job['url']
@@ -149,10 +151,10 @@ class Crawler:
             except Exception as e:
                 logging.error(f"consumer got problem {e}")
 
-    def save_result(self, job, result):
+    def save_result(self, result):
         try:
             post_id = self.db_collection.update(
-                {'url': job['seed'] + job['url']},
+                {'url': result['url']},
                 result,
                 upsert=True)
             logging.debug(f"post successful, post id {post_id}")
@@ -161,9 +163,6 @@ class Crawler:
         except Exception as e:
             logging.error("failed to save post to mongo", e)
 
-    def save_result_to_db(self, result):
-        pass
-
     async def produce(self, seed: dict) -> None:
         while self.to_run:
             await self.url_queue.put(self.config['pages'][seed['next_page']])
@@ -171,13 +170,11 @@ class Crawler:
                          f"{{self.config['seeds'][0]['seed']}} to queue.")
             await asyncio.sleep(seed['interval'])
 
-    async def crawl(self):
+    async def crawl(self) -> None:
         await asyncio.gather(*self.schedulers)
-        await self.url_queue.join()  # Implicitly awaits consumers, too
-        # for c in self.downloaders:
-        #     c.cancel()
+        await self.url_queue.join()
 
-    def start(self):
+    def start(self) -> None:
         try:
             self.loop.run_until_complete(self.crawl())
         except KeyboardInterrupt:
