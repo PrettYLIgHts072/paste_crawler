@@ -149,7 +149,7 @@ class Crawler:
     def save_result(self, result):
         try:
             post_id = self.db.save(result)
-            logging.debug(f"Successfully saved, post id {post_id['upserted']}")
+            logging.debug(f"Successfully saved, post id {post_id}")
         except pymongo.errors.ServerSelectionTimeoutError as e:
             logging.error("error saving results: {}".format(e))
         except Exception as e:
