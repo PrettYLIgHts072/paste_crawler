@@ -58,7 +58,7 @@ class Crawler:
         while self.to_run:
             await self.url_queue.put(self.config['pages'][seed['next_page']])
             logging.info(f"Producer added "
-                         f"{{self.config['seeds'][0]['seed']}} to queue.")
+                         f"{self.config['seeds'][0]['seed']} to queue.")
             await asyncio.sleep(seed['interval'])
 
     async def downloader(self, _id: int) -> None:
