@@ -23,9 +23,9 @@ class Crawler:
                             # level=logging.DEBUG,
                             level=logging.INFO,
                             datefmt=self.config['logging_datefmt'])
-        self.time_reformatter = TimeReformat(self.config['time_parse_str'],
-                                             self.config['src_time_zone'],
-                                             self.config['res_time_format'])
+        self.t_format = TimeFormat(self.config['time_parse_str'],
+                                   self.config['src_time_zone'],
+                                   self.config['res_time_format'])
         self.to_run = True
         self.loop = asyncio.get_event_loop()
         self.url_queue = asyncio.Queue()
@@ -85,7 +85,7 @@ class Crawler:
                 logging.error(f"consumer got problem {e}")
 
     def format_content(self, res: dict) -> dict:
-        return {'time': self.time_reformatter.reformat(res['time'][0]),
+        return {'time': self.t_format.reformat(res['time'][0]),
                 'title': self.clean_untitled_unknown(res['title']),
                 'author': self.clean_untitled_unknown(res['author']),
                 'content': self.clean_trailing_spaces(res['content'][0])}
