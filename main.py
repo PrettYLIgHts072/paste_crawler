@@ -137,14 +137,7 @@ class Crawler:
                 content = await self.fetch_page(job_url)
 
                 if job['next_page']:
-                    res = []
-                    for feature, rule in job['features'].items():
-                        res = extract_features(content, rule)
-                    logging.debug(f"push links to queue {res[:5]}")
-                    next_job = self.get_next_job(job)
-                    for r in res:
-                        next_job['url'] = str(r)
-                        await self.url_queue.put(next_job.copy())
+                    await self.add_urls_to_crawl(job, content)
                 else:
                     paste = await self.get_paste_content(job, content)
                     paste = self.clean_results(self.time_reformatter, paste)
