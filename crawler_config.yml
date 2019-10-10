@@ -20,7 +20,7 @@ pages:
     features:
       pastes_urls: //tr/td[not(@class)]/a/@href
     next_page: paste_url
-    seed: https://www.pastebin.com
+    seed: https://pastebin.com
     url: /archive
   paste_url:
     features:
@@ -29,14 +29,15 @@ pages:
       time: //div[@class="paste_box_frame"]/descendant::div[@class="paste_box_line2"]/span/@title
       title: //div[@class="paste_box_line1"]/@title
     next_page: null
-    seed: https://www.pastebin.com
+    seed: https://pastebin.com
     url: /*
 res_time_format: UTC
 seeds:
 - interval: 120
   next_page: archive
-  seed: https://www.pastebin.com
+  seed: https://pastebin.com
+
 src_time_zone: US/Central
 time_parse_str: dddd Do [of] MMMM YYYY hh:mm:ss a [CDT]
 
-num_connections: 5
+num_connections: 2
