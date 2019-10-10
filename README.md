@@ -9,6 +9,7 @@ This mini project can crawl [pastebin.com](www.pastebin.com) at intervals(defaul
 
 ### Prerequisites
 - Docker
+- docker-compose
 
 ### Run instructions:
 1. `git clone https://github.com/NescobarAlopLop/paste_crawler`
