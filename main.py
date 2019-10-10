@@ -74,8 +74,9 @@ class Crawler:
             self.create_loop_event_tasks(self.download,
                                          range(self.config['num_connections']))
 
-    def clean_results(self, res: dict) -> dict:
-        return {'time': self.time_reformatter.reformat(res['time'][0]),
+    @staticmethod
+    def clean_results(time_reformatter, res: dict) -> dict:
+        return {'time': time_reformatter.reformat(res['time'][0]),
                 'title': clean_untitled_unknown(res['title']),
                 'author': clean_untitled_unknown(res['author']),
                 'content': clean_trailing_spaces(res['content'][0])}
@@ -145,17 +146,11 @@ class Crawler:
                         next_job['url'] = str(r)
                         await self.url_queue.put(next_job.copy())
                 else:
-                    res = {}
-                    for feature, rule in job['features'].items():
-                        res[feature] = extract_features(content, rule)
-                    res = self.clean_results(res)
-                    logging.debug("storing job results to db {}"
-                                  .format([res['author'],
-                                           res['title'],
-                                           res['content'][:30]]))
-                    res['url'] = job_url
-                    self.save_result(job, res)
-                self.url_queue.task_done()
+                    paste = await self.get_paste_content(job, content)
+                    paste = self.clean_results(self.time_reformatter, paste)
+                    paste['url'] = job_url
+                    self.save_result(paste)
+                self.mark_job_done()
             except HTTPError as http_err:
                 logging.error(f'http error occurred: {http_err}')
             except Exception as e:
