@@ -1,3 +1,15 @@
+## Pastebin crawler
+This mini project can crawls pastebin.com every 2 minutes and saves all recent 
+pastes into mongodb containr.
+
+### Prerquisites
+- Docker
+
+### Run instructions:
+1. ```bash
+git clone 
+```
+
 ```bash
 docker-compose up
 ```
