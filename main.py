@@ -71,7 +71,7 @@ class Crawler:
         self.schedulers = \
             self.create_loop_event_tasks(self.produce, self.config['seeds'])
         self.downloaders = \
-            self.create_loop_event_tasks(self.consume,
+            self.create_loop_event_tasks(self.download,
                                          range(self.config['num_connections']))
 
     def clean_results(self, res: dict) -> dict:
@@ -104,7 +104,28 @@ class Crawler:
     def get_next_job(self, job):
         return self.config['pages'][job['next_page']]
 
-    async def consume(self, name: int) -> None:
+    async def add_urls_to_crawl(self, job, content):
+        res = []
+        for feature, rule in job['features'].items():
+            res = extract_features(content, rule)
+        logging.debug(f"push links to queue {res[:5]}")
+        next_job = self.get_next_job(job)
+        for r in res:
+            next_job['url'] = str(r)
+            await self.url_queue.put(next_job.copy())
+
+    @staticmethod
+    async def get_paste_content(job, content):
+        return {feature: extract_features(content, rule)
+                for (feature, rule) in job['features'].items()}
+
+    def mark_job_done(self):
+        self.url_queue.task_done()
+
+    async def get_a_job(self):
+        return await self.url_queue.get()
+
+    async def download(self, name: int) -> None:
         while True:
             try:
                 await random_wait(caller=f"Consumer {name}")
