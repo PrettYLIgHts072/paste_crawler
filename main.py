@@ -17,18 +17,17 @@ class Crawler:
             self.config = yaml.safe_load(open(settings_path))
         except FileNotFoundError:
             logging.error(f"settings file cant be fount at: {settings_path}")
-            print(f"settings file cant be fount at: {settings_path}")
-
+            raise Exception("Crawler settings file cant be found")
         logging.basicConfig(format=self.config['logger_format'],
-                            # level=logging.DEBUG,
-                            level=logging.INFO,
+                            level=logging.DEBUG,
+                            # level=logging.INFO,
                             datefmt=self.config['logging_datefmt'])
         self.t_format = TimeFormat(self.config['time_parse_str'],
                                    self.config['src_time_zone'],
                                    self.config['res_time_format'])
         self.to_run = True
-        self.loop = asyncio.get_event_loop()
-        self.url_queue = asyncio.Queue()
+        self.event_loop = asyncio.get_event_loop()
+        self.job_queue = asyncio.Queue()
         self.db = DB(self.config['db'])
         self.headers = self.config['browser_headers']
         self.schedulers = \
@@ -37,16 +36,16 @@ class Crawler:
             self.create_loop_event_tasks(self.downloader,
                                          range(self.config['num_connections']))
 
-    def create_loop_event_tasks(self, func, tasks):
-        return [self.loop.create_task(func(t)) for t in tasks]
+    def create_loop_event_tasks(self, func, tasks) -> List[asyncio.Task]:
+        return [self.event_loop.create_task(func(t)) for t in tasks]
 
     async def crawl(self) -> None:
         await asyncio.gather(*self.schedulers)
-        await self.url_queue.join()
+        await self.job_queue.join()
 
     def start(self) -> None:
         try:
-            self.loop.run_until_complete(self.crawl())
+            self.event_loop.run_until_complete(self.crawl())
         except KeyboardInterrupt:
             logging.info("exiting on keyboard interrupt")
             self.stop()
@@ -56,7 +55,7 @@ class Crawler:
 
     async def scheduler(self, seed: dict) -> None:
         while self.to_run:
-            await self.url_queue.put(self.config['pages'][seed['next_page']])
+            await self.job_queue.put(self.config['pages'][seed['next_page']])
             logging.info(f"Producer added "
                          f"{self.config['seeds'][0]['seed']} to queue.")
             await asyncio.sleep(seed['interval'])
@@ -113,7 +112,7 @@ class Crawler:
         next_job = self.get_next_job(job)
         for r in paste_urls:
             next_job['url'] = str(r)
-            await self.url_queue.put(next_job.copy())
+            await self.job_queue.put(next_job.copy())
 
     async def get_paste_content(self, job, content):
         return {feature: self.extract_features(content, rule)
@@ -141,15 +140,18 @@ class Crawler:
         return text
 
     async def get_a_job(self):
-        return await self.url_queue.get()
+        return await self.job_queue.get()
 
     def mark_job_done(self):
-        self.url_queue.task_done()
+        self.job_queue.task_done()
 
     def save_result(self, result):
         try:
             post_id = self.db.save(result)
-            logging.debug(f"Successfully saved, post id {post_id}")
+            if post_id['updatedExisting']:
+                logging.info(f"already in db. {result['url']} - {post_id['upserted']}")
+            else:
+                logging.info(f"Successfully saved to db. {result['url']} - {post_id['upserted']}")
         except pymongo.errors.ServerSelectionTimeoutError as e:
             logging.error("error saving results: {}".format(e))
         except Exception as e:
