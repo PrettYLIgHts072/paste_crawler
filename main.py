@@ -1,5 +1,5 @@
 import logging
-from typing import Optional, List
+from typing import Optional, List, Iterable, AnyStr, AsyncGenerator
 
 import pymongo.collation
 import pymongo.errors
@@ -36,7 +36,8 @@ class Crawler:
             self.create_loop_event_tasks(self.downloader,
                                          range(self.config['num_connections']))
 
-    def create_loop_event_tasks(self, func, tasks) -> List[asyncio.Task]:
+    def create_loop_event_tasks(self, func, tasks: Iterable)\
+            -> List[asyncio.Task]:
         return [self.event_loop.create_task(func(t)) for t in tasks]
 
     async def crawl(self) -> None:
@@ -89,7 +90,7 @@ class Crawler:
                 'author': self.clean_untitled_unknown(res['author']),
                 'content': self.clean_trailing_spaces(res['content'][0])}
 
-    async def page_content(self, url: str, retry: int = 2) -> Optional[bytes]:
+    async def page_content(self, url: str, retry: int = 2) -> Optional[AnyStr]:
         try:
             response = requests.get(url, headers=random.choice(self.headers))
             response.raise_for_status()
@@ -102,7 +103,7 @@ class Crawler:
             else:
                 raise Exception('Didn\'t get {} page'.format(url))
 
-    def get_next_job(self, job):
+    def get_next_job(self, job) -> dict:
         return self.config['pages'][job['next_page']]
 
     async def add_paste_urls_to_crawl(self, job, content):
@@ -139,19 +140,21 @@ class Crawler:
             return ""
         return text
 
-    async def get_a_job(self):
+    async def get_a_job(self) -> AsyncGenerator:
         return await self.job_queue.get()
 
-    def mark_job_done(self):
+    def mark_job_done(self) -> None:
         self.job_queue.task_done()
 
-    def save_result(self, result):
+    def save_result(self, result) -> None:
         try:
             post_id = self.db.save(result)
             if post_id['updatedExisting']:
-                logging.info(f"already in db. {result['url']} - {post_id['upserted']}")
+                logging.info(f"already in db."
+                             f" {result['url']} - {post_id['upserted']}")
             else:
-                logging.info(f"Successfully saved to db. {result['url']} - {post_id['upserted']}")
+                logging.info(f"Successfully saved to db."
+                             f" {result['url']} - {post_id['upserted']}")
         except pymongo.errors.ServerSelectionTimeoutError as e:
             logging.error("error saving results: {}".format(e))
         except Exception as e:
