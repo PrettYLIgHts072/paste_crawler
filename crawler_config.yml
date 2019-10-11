@@ -29,6 +29,7 @@ db:
   mongo_url: localhost
 #  mongo_url: mongodb
   db_name: paste_bin
+  db_collection: 'paste_collection'
 
 res_time_format: UTC
 logger_format: '%(asctime)s: %(message)s'

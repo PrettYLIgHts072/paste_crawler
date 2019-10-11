@@ -15,12 +15,9 @@ class DB:
         self.mongo_url = db_conf['mongo_url']
         self.mongo_port = db_conf['mongo_port']
         self.db_name = db_conf['db_name']
-        self.db_collection = self.get_db_collection()
-
-    def get_db_collection(self):
-        mongo_client = MongoClient(self.mongo_url, self.mongo_port)
-        db = mongo_client[self.db_name]
-        return db['paste_collection']
+        self.mongo_client = MongoClient(self.mongo_url, self.mongo_port)
+        self.db_collection = \
+            self.mongo_client[self.db_name][db_conf['db_collection']]
 
     def save(self, result):
         post_id = self.db_collection.update(
@@ -28,6 +25,9 @@ class DB:
             result,
             upsert=True)
         return post_id
+
+    def __del__(self):
+        self.mongo_client.close()
 
 
 class TimeFormat:
