@@ -1,20 +1,12 @@
-browser_headers:
-- User-Agent: Mozilla/5.0 (Macintosh; Intel Mac OS X 10_10_1) AppleWebKit/537.36 (KHTML,
-    like Gecko) Chrome/39.0.2171.95 Safari/537.36
-- User-Agent: Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML,
-    like Gecko) Chrome/70.0.3538.77 Safari/537.36
-- User-Agent: Mozilla/5.0 (X11; Linux i686; rv:64.0) Gecko/20100101 Firefox/64.0
-- User-Agent: Opera/9.80 (X11; Linux i686; Ubuntu/14.10) Presto/2.12.388 Version/12.16
-- User-Agent: Opera/12.02 (Android 4.1; Linux; Opera Mobi/ADR-1111101157; U; en-US)
-    Presto/2.9.201 Version/12.02
-logger_format: '%(asctime)s: %(message)s'
-logging_datefmt: '%H:%M:%S'
+num_connections: 2
+
 max_url_queue_size: 1000
-db:
-  mongo_port: 27017
-#  mongo_url: localhost
-  mongo_url: mongodb
-  db_name: paste_bin
+
+seeds:
+- interval: 120
+  next_page: archive
+  seed: https://pastebin.com
+
 pages:
   archive:
     features:
@@ -31,13 +23,26 @@ pages:
     next_page: null
     seed: https://pastebin.com
     url: /*
+
+db:
+  mongo_port: 27017
+  mongo_url: localhost
+#  mongo_url: mongodb
+  db_name: paste_bin
+
 res_time_format: UTC
-seeds:
-- interval: 120
-  next_page: archive
-  seed: https://pastebin.com
+logger_format: '%(asctime)s: %(message)s'
+logging_datefmt: '%H:%M:%S'
 
 src_time_zone: US/Central
 time_parse_str: dddd Do [of] MMMM YYYY hh:mm:ss a [CDT]
 
-num_connections: 2
+browser_headers:
+- User-Agent: Mozilla/5.0 (Macintosh; Intel Mac OS X 10_10_1) AppleWebKit/537.36 (KHTML,
+    like Gecko) Chrome/39.0.2171.95 Safari/537.36
+- User-Agent: Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML,
+    like Gecko) Chrome/70.0.3538.77 Safari/537.36
+- User-Agent: Mozilla/5.0 (X11; Linux i686; rv:64.0) Gecko/20100101 Firefox/64.0
+- User-Agent: Opera/9.80 (X11; Linux i686; Ubuntu/14.10) Presto/2.12.388 Version/12.16
+- User-Agent: Opera/12.02 (Android 4.1; Linux; Opera Mobi/ADR-1111101157; U; en-US)
+    Presto/2.9.201 Version/12.02
