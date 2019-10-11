@@ -26,8 +26,8 @@ pages:
 
 db:
   mongo_port: 27017
-  mongo_url: localhost
-#  mongo_url: mongodb
+#  mongo_url: localhost
+  mongo_url: mongodb
   db_name: paste_bin
   db_collection: 'paste_collection'
 
