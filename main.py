@@ -1,5 +1,7 @@
+import asyncio
 import logging
-from typing import Optional, List, Iterable, AnyStr, AsyncGenerator
+import random
+from typing import Optional, List, Iterable, AnyStr
 
 import pymongo.collation
 import pymongo.errors
@@ -8,7 +10,7 @@ import yaml
 from lxml import html
 from requests.exceptions import HTTPError
 
-from utils import *
+from utils import DB, random_wait, TimeFormat
 
 
 class Crawler:
