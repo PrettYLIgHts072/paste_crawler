@@ -10,12 +10,6 @@ async def random_wait(a: int = 0, b: int = 3):
     await asyncio.sleep(i)
 
 
-def get_db_collection(conf: dict):
-    mongo_client = MongoClient(conf['mongo_url'], conf['mongo_port'])
-    db = mongo_client[conf['db_name']]
-    return db['paste_collection']
-
-
 class DB:
     def __init__(self, db_conf: dict):
         self.mongo_url = db_conf['mongo_url']
