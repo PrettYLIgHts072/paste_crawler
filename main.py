@@ -140,7 +140,7 @@ class Crawler:
             return ""
         return text
 
-    async def get_a_job(self) -> AsyncGenerator:
+    async def get_a_job(self):
         return await self.job_queue.get()
 
     def mark_job_done(self) -> None:
