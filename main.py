@@ -27,12 +27,18 @@ class Crawler:
         self.t_formater = TimeFormater(**self.config['time_formatter'])
         self.to_run = True
         self.event_loop = asyncio.get_event_loop()
-        self.job_queue = asyncio.Queue()
+        self.task_queue = asyncio.Queue()
         self.db = DB(self.config['db'])
         self.headers = self.config['browser_headers']
-        self.schedulers = \
-            self.create_loop_event_tasks(self.scheduler, self.config['seeds'])
-        self.downloaders = \
+        self.schedulers = self.get_schedulers()
+        self.downloaders = self.get_downloaders()
+
+    def get_schedulers(self):
+        return self.create_loop_event_tasks(self.scheduler,
+                                            self.config['seeds'])
+
+    def get_downloaders(self):
+        return \
             self.create_loop_event_tasks(self.downloader,
                                          range(self.config['num_connections']))
 
@@ -42,7 +48,7 @@ class Crawler:
 
     async def crawl(self) -> None:
         await asyncio.gather(*self.schedulers)
-        await self.job_queue.join()
+        await self.task_queue.join()
 
     def start(self) -> None:
         try:
@@ -56,7 +62,7 @@ class Crawler:
 
     async def scheduler(self, seed: dict) -> None:
         while self.to_run:
-            await self.job_queue.put(self.config['pages'][seed['next_page']])
+            await self.task_queue.put(self.config['pages'][seed['next_page']])
             logging.info(f"Producer added "
                          f"{self.config['seeds'][0]['seed']} to queue.")
             await asyncio.sleep(seed['interval'])
@@ -65,20 +71,20 @@ class Crawler:
         while True:
             try:
                 await random_wait()
-                job = await self.get_a_job()
-                logging.info(f"Downloader {_id} got new job, features: "
-                             f" {job['features']}")
-                job_url = job['seed'] + job['url']
-                content = await self.page_content(job_url)
+                task = await self.get_next_task()
+                logging.info(f"Downloader {_id} got a new task, features: "
+                             f" {task['features']}")
+                task_url = task['seed'] + task['url']
+                content = await self.page_content(task_url)
 
-                if job['next_page']:
-                    await self.add_paste_urls_to_crawl(job, content)
+                if task['next_page']:
+                    await self.add_paste_urls_to_crawl(task, content)
                 else:
-                    paste = await self.get_paste_content(job, content)
+                    paste = await self.get_paste_content(task, content)
                     paste = self.format_content(paste)
-                    paste['url'] = job_url
+                    paste['url'] = task_url
                     self.save_result(paste)
-                self.mark_job_done()
+                self.mark_task_done()
             except HTTPError as http_err:
                 logging.error(f'http error occurred: {http_err}')
             except Exception as e:
@@ -103,21 +109,18 @@ class Crawler:
             else:
                 raise Exception('Didn\'t get {} page'.format(url))
 
-    def get_next_job(self, job) -> dict:
-        return self.config['pages'][job['next_page']]
-
-    async def add_paste_urls_to_crawl(self, job, content):
+    async def add_paste_urls_to_crawl(self, task, content):
         paste_urls = [self.extract_features(content, rule)
-                      for rule in job['features'].values()][0]
+                      for rule in task['features'].values()][0]
         logging.debug(f"push links to queue {paste_urls[:5]}")
-        next_job = self.get_next_job(job)
+        next_task = self.config['pages'][task['next_page']]
         for r in paste_urls:
-            next_job['url'] = str(r)
-            await self.job_queue.put(next_job.copy())
+            next_task['url'] = str(r)
+            await self.task_queue.put(next_task.copy())
 
-    async def get_paste_content(self, job, content):
+    async def get_paste_content(self, task, content):
         return {feature: self.extract_features(content, rule)
-                for (feature, rule) in job['features'].items()}
+                for (feature, rule) in task['features'].items()}
 
     @staticmethod
     def extract_features(page: bytes, xpath_rule: str) -> list:
@@ -140,11 +143,11 @@ class Crawler:
             return ""
         return text
 
-    async def get_a_job(self):
-        return await self.job_queue.get()
+    async def get_next_task(self):
+        return await self.task_queue.get()
 
-    def mark_job_done(self) -> None:
-        self.job_queue.task_done()
+    def mark_task_done(self) -> None:
+        self.task_queue.task_done()
 
     def save_result(self, result) -> None:
         try:

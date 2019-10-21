@@ -31,12 +31,13 @@ db:
   db_name: paste_bin
   db_collection: 'paste_collection'
 
-res_time_format: UTC
 logger_format: '%(asctime)s: %(message)s'
 logging_datefmt: '%H:%M:%S'
 
-src_time_zone: US/Central
-time_parse_str: dddd Do [of] MMMM YYYY hh:mm:ss a [CDT]
+time_formatter:
+  res_time_format: UTC
+  src_time_zone: US/Central
+  time_parse_str: dddd Do [of] MMMM YYYY hh:mm:ss a [CDT]
 
 browser_headers:
 - User-Agent: Mozilla/5.0 (Macintosh; Intel Mac OS X 10_10_1) AppleWebKit/537.36 (KHTML,
