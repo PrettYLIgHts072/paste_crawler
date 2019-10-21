@@ -10,7 +10,7 @@ import yaml
 from lxml import html
 from requests.exceptions import HTTPError
 
-from utils import DB, random_wait, TimeFormat
+from utils import DB, random_wait, TimeFormater
 
 
 class Crawler:
