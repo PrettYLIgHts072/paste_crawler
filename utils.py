@@ -30,11 +30,11 @@ class DB:
         self.mongo_client.close()
 
 
-class TimeFormat:
-    def __init__(self, parse_str, src_time_zone, res_format):
-        self.parse_str = parse_str
+class TimeFormater:
+    def __init__(self, time_parse_str, src_time_zone, res_time_format):
+        self.parse_str = time_parse_str
         self.src_time_zone = src_time_zone
-        self.res_format = res_format
+        self.res_format = res_time_format
 
     def reformat(self, in_time):
         in_time = str(in_time)
